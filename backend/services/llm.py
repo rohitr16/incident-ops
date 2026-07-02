@@ -25,7 +25,9 @@ class LLMService:
         # Conditionally resolve API key based on selected provider
         if api_key:
             self.api_key = api_key
-        elif self.provider in ("openai", "ollama", "lmstudio"):
+        elif self.provider == "lmstudio":
+            self.api_key = os.getenv("LMSTUDIO_API_KEY") or os.getenv("OPENAI_API_KEY")
+        elif self.provider in ("openai", "ollama"):
             self.api_key = os.getenv("OPENAI_API_KEY")
         elif self.provider == "gemini":
             self.api_key = os.getenv("GEMINI_API_KEY")

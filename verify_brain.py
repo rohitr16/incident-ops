@@ -10,6 +10,18 @@ from database import init_db, save_incident, get_all_incidents
 
 import asyncio
 
+async def test_lmstudio_api_key_loading():
+    import os
+    from services.llm import LLMService
+    os.environ["LMSTUDIO_API_KEY"] = "test-lmstudio-key"
+    os.environ["LLM_PROVIDER"] = "lmstudio"
+    svc = LLMService()
+    assert svc.api_key == "test-lmstudio-key", f"Expected test-lmstudio-key, got {svc.api_key}"
+    
+    # Clean up environment variables
+    del os.environ["LMSTUDIO_API_KEY"]
+    del os.environ["LLM_PROVIDER"]
+
 async def test_llm_service():
     from services.llm import LLMService
     # Test fallback to empty/mock on invalid config
@@ -18,6 +30,9 @@ async def test_llm_service():
     assert res["category"] == "Storage"
     assert res["priority"] == "P1"
     assert res["recommendation"] is not None
+    
+    # Run the new key loading test
+    await test_lmstudio_api_key_loading()
 
 def main():
     transformer = LogTransformer()
