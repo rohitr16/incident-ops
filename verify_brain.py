@@ -94,6 +94,18 @@ def main():
         resolved = resolve_incident(1, db_test_path)
         assert resolved["resolution"]["status"] == "resolved"
         assert resolved["resolution"]["steps_executed"] == ["Step A", "Step B"]
+
+        # Test agent history extension
+        from database import update_agent_history
+        history_entry = {
+            "node": "SmartQueue",
+            "status": "completed",
+            "message": "Triage done",
+            "timestamp": "2026-07-02T21:30:00Z"
+        }
+        updated = update_agent_history(1, history_entry, db_test_path)
+        assert len(updated["agent_history"]) == 1
+        assert updated["agent_history"][0]["node"] == "SmartQueue"
     finally:
         for suffix in ["", "-wal", "-shm"]:
             p = db_test_path + suffix

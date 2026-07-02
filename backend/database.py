@@ -36,10 +36,16 @@ def init_db(db_path: str = "data/incidents.db") -> None:
                     steps_executed TEXT NOT NULL,
                     recommendation TEXT,
                     notification TEXT,
+                    agent_history TEXT DEFAULT '[]',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            # Check if agent_history exists, if not, add it
+            cursor.execute("PRAGMA table_info(incidents);")
+            columns = [info[1] for info in cursor.fetchall()]
+            if "agent_history" not in columns:
+                cursor.execute("ALTER TABLE incidents ADD COLUMN agent_history TEXT DEFAULT '[]';")
             conn.commit()
     finally:
         if conn:
@@ -63,13 +69,14 @@ def save_incident(incident: Dict[str, Any], db_path: str = "data/incidents.db") 
                 status = res.get("status") or "pending"
                 recommendation = res.get("recommendation") or ""
                 notification = incident.get("notification") or ""
+                agent_history = incident.get("agent_history") or []
                 
                 cursor.execute("""
                     INSERT INTO incidents (
                         source, raw_line, structured_log, detection, triage, 
                         resolution_status, playbook_steps, steps_executed, 
-                        recommendation, notification
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        recommendation, notification, agent_history
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     incident.get("source") or "unknown",
                     incident.get("raw_line"),
@@ -80,7 +87,8 @@ def save_incident(incident: Dict[str, Any], db_path: str = "data/incidents.db") 
                     json.dumps(playbook_steps),
                     json.dumps(steps_executed),
                     recommendation,
-                    notification
+                    notification,
+                    json.dumps(agent_history)
                 ))
                 conn.commit()
                 new_id = cursor.lastrowid
@@ -90,7 +98,45 @@ def save_incident(incident: Dict[str, Any], db_path: str = "data/incidents.db") 
     
     updated_incident = dict(incident)
     updated_incident["incident_id"] = new_id
+    updated_incident["agent_history"] = agent_history
     return updated_incident
+
+def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
+    agent_history = []
+    if "agent_history" in row.keys():
+        agent_history = _safe_json_loads(row["agent_history"], [])
+    return {
+        "incident_id": row["incident_id"],
+        "source": row["source"],
+        "raw_line": row["raw_line"],
+        "structured_log": _safe_json_loads(row["structured_log"], {}),
+        "detection": _safe_json_loads(row["detection"], {}),
+        "triage": _safe_json_loads(row["triage"], {}),
+        "resolution": {
+            "status": row["resolution_status"],
+            "playbook_used": _safe_json_loads(row["playbook_steps"], []),
+            "steps_executed": _safe_json_loads(row["steps_executed"], []),
+            "recommendation": row["recommendation"],
+        },
+        "notification": row["notification"],
+        "agent_history": agent_history
+    }
+
+def _get_incident_by_id(incident_id: int, db_path: str = "data/incidents.db") -> Dict[str, Any]:
+    conn = None
+    try:
+        with sqlite3.connect(db_path, timeout=10.0) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("SELECT * FROM incidents WHERE incident_id = ?", (incident_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Incident {incident_id} not found")
+            return _row_to_dict(row)
+    finally:
+        if conn:
+            conn.close()
 
 def get_all_incidents(db_path: str = "data/incidents.db") -> List[Dict[str, Any]]:
     conn = None
@@ -107,21 +153,7 @@ def get_all_incidents(db_path: str = "data/incidents.db") -> List[Dict[str, Any]
     
     results = []
     for row in rows:
-        results.append({
-            "incident_id": row["incident_id"],
-            "source": row["source"],
-            "raw_line": row["raw_line"],
-            "structured_log": _safe_json_loads(row["structured_log"], {}),
-            "detection": _safe_json_loads(row["detection"], {}),
-            "triage": _safe_json_loads(row["triage"], {}),
-            "resolution": {
-                "status": row["resolution_status"],
-                "playbook_used": _safe_json_loads(row["playbook_steps"], []),
-                "steps_executed": _safe_json_loads(row["steps_executed"], []),
-                "recommendation": row["recommendation"],
-            },
-            "notification": row["notification"]
-        })
+        results.append(_row_to_dict(row))
     return results
 
 def update_playbook_steps(incident_id: int, steps_executed: List[str], db_path: str = "data/incidents.db") -> Dict[str, Any]:
@@ -164,21 +196,7 @@ def update_playbook_steps(incident_id: int, steps_executed: List[str], db_path: 
             if conn:
                 conn.close()
     
-    return {
-        "incident_id": row["incident_id"],
-        "source": row["source"],
-        "raw_line": row["raw_line"],
-        "structured_log": _safe_json_loads(row["structured_log"], {}),
-        "detection": _safe_json_loads(row["detection"], {}),
-        "triage": _safe_json_loads(row["triage"], {}),
-        "resolution": {
-            "status": row["resolution_status"],
-            "playbook_used": playbook_steps,
-            "steps_executed": steps_executed,
-            "recommendation": row["recommendation"],
-        },
-        "notification": row["notification"]
-    }
+    return _row_to_dict(row)
 
 def resolve_incident(incident_id: int, db_path: str = "data/incidents.db") -> Dict[str, Any]:
     conn = None
@@ -209,18 +227,36 @@ def resolve_incident(incident_id: int, db_path: str = "data/incidents.db") -> Di
             if conn:
                 conn.close()
     
-    return {
-        "incident_id": row["incident_id"],
-        "source": row["source"],
-        "raw_line": row["raw_line"],
-        "structured_log": _safe_json_loads(row["structured_log"], {}),
-        "detection": _safe_json_loads(row["detection"], {}),
-        "triage": _safe_json_loads(row["triage"], {}),
-        "resolution": {
-            "status": row["resolution_status"],
-            "playbook_used": playbook_steps,
-            "steps_executed": playbook_steps,
-            "recommendation": row["recommendation"],
-        },
-        "notification": row["notification"]
-    }
+    return _row_to_dict(row)
+
+def update_agent_history(incident_id: int, entry: dict, db_path: str = "data/incidents.db") -> dict:
+    conn = None
+    with db_write_lock:
+        try:
+            with sqlite3.connect(db_path, timeout=10.0) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL;")
+                
+                # Check table info to ensure agent_history column exists
+                cursor.execute("PRAGMA table_info(incidents);")
+                columns = [info[1] for info in cursor.fetchall()]
+                if "agent_history" not in columns:
+                    cursor.execute("ALTER TABLE incidents ADD COLUMN agent_history TEXT DEFAULT '[]';")
+                
+                cursor.execute("SELECT agent_history FROM incidents WHERE incident_id = ?", (incident_id,))
+                row = cursor.fetchone()
+                if not row:
+                    raise ValueError(f"Incident {incident_id} not found")
+                
+                history = json.loads(row[0]) if row[0] else []
+                history.append(entry)
+                cursor.execute(
+                    "UPDATE incidents SET agent_history = ?, updated_at = CURRENT_TIMESTAMP WHERE incident_id = ?",
+                    (json.dumps(history), incident_id)
+                )
+                conn.commit()
+        finally:
+            if conn:
+                conn.close()
+    return _get_incident_by_id(incident_id, db_path)
