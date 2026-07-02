@@ -1,6 +1,6 @@
 import sys
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse
 
 from orchestrator import IncidentOrchestrator
@@ -61,18 +61,20 @@ async def list_incidents():
 @router.post("/incidents/{incident_id}/steps")
 async def update_steps(incident_id: int, payload: dict):
     steps = payload.get("steps_executed", [])
-    import os
-    db_path = os.path.join(orchestrator.logs_dir, "..", "data", "incidents.db")
-    updated = update_playbook_steps(incident_id, steps, db_path)
+    try:
+        updated = update_playbook_steps(incident_id, steps, orchestrator.db_path)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     await manager.broadcast(updated)
     return JSONResponse(content=updated)
 
 
 @router.post("/incidents/{incident_id}/resolve")
 async def resolve(incident_id: int):
-    import os
-    db_path = os.path.join(orchestrator.logs_dir, "..", "data", "incidents.db")
-    updated = resolve_incident(incident_id, db_path)
+    try:
+        updated = resolve_incident(incident_id, orchestrator.db_path)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     await manager.broadcast(updated)
     return JSONResponse(content=updated)
 

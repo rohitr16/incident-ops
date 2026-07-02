@@ -30,6 +30,9 @@ def main():
     resp = client.post("/ingest", json={"source": "test.log"})
     assert resp.status_code == 200, f"ingest failed: {resp.status_code}: {resp.text}"
     body = resp.json()
+    required = {"incident_id", "source", "structured_log", "detection", "triage", "resolution", "notification"}
+    missing = required - set(body.keys())
+    assert not missing, f"Missing keys in response: {missing}"
     incident_id = body["incident_id"]
 
     # Test step execution endpoint
