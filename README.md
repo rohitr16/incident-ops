@@ -71,6 +71,16 @@ Open `.env` and configure the following variables:
 
 ---
 
+## Seeding Test Data
+
+To test different scenarios (e.g. priorities P0-P4, different incident categories, and pending/resolved states) on the dashboard, you can seed the database with mock logs:
+```bash
+python3 populate_db.py
+```
+This script resets the local SQLite database and pre-populates it with five diverse incident records.
+
+---
+
 ## Running the Application
 
 ### Step 1: Start the Backend (FastAPI)
