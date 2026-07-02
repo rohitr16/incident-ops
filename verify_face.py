@@ -68,6 +68,13 @@ def main():
             print(f'invalid:{bad}')
         sys.exit(1)
 
+    dashboard_path = ROOT / 'incident-dashboard-poc' / 'frontend' / 'app' / 'IncidentDashboard.js'
+    with open(dashboard_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    if 'feed-panel' not in content or 'inspector-panel' not in content:
+        print('MISSING: feed-panel or inspector-panel elements in IncidentDashboard.js')
+        sys.exit(1)
+
     print('VERIFIED')
 
 if __name__ == '__main__':
