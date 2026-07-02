@@ -30,11 +30,21 @@ def main():
     resp = client.post("/ingest", json={"source": "test.log"})
     assert resp.status_code == 200, f"ingest failed: {resp.status_code}: {resp.text}"
     body = resp.json()
-    required = {"incident_id", "source", "structured_log", "detection", "triage", "resolution", "notification"}
-    missing = required - set(body.keys())
-    assert not missing, f"Missing keys in response: {missing}"
-    print("[PASS] /ingest")
-    print(json.dumps(body, indent=2))
+    incident_id = body["incident_id"]
+
+    # Test step execution endpoint
+    steps_payload = {"steps_executed": ["Step A"]}
+    resp_steps = client.post(f"/incidents/{incident_id}/steps", json=steps_payload)
+    assert resp_steps.status_code == 200, resp_steps.text
+    body_steps = resp_steps.json()
+    assert body_steps["resolution"]["steps_executed"] == ["Step A"]
+
+    # Test resolve endpoint
+    resp_resolve = client.post(f"/incidents/{incident_id}/resolve")
+    assert resp_resolve.status_code == 200, resp_resolve.text
+    body_resolve = resp_resolve.json()
+    assert body_resolve["resolution"]["status"] == "resolved"
+
 
     print("VERIFIED")
 

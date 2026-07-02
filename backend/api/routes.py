@@ -4,6 +4,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 from orchestrator import IncidentOrchestrator
+from database import update_playbook_steps, resolve_incident
 
 router = APIRouter()
 
@@ -55,6 +56,26 @@ async def ingest(payload: dict):
 @router.get("/incidents")
 async def list_incidents():
     return JSONResponse(content=orchestrator.incidents_store)
+
+
+@router.post("/incidents/{incident_id}/steps")
+async def update_steps(incident_id: int, payload: dict):
+    steps = payload.get("steps_executed", [])
+    import os
+    db_path = os.path.join(orchestrator.logs_dir, "..", "data", "incidents.db")
+    updated = update_playbook_steps(incident_id, steps, db_path)
+    await manager.broadcast(updated)
+    return JSONResponse(content=updated)
+
+
+@router.post("/incidents/{incident_id}/resolve")
+async def resolve(incident_id: int):
+    import os
+    db_path = os.path.join(orchestrator.logs_dir, "..", "data", "incidents.db")
+    updated = resolve_incident(incident_id, db_path)
+    await manager.broadcast(updated)
+    return JSONResponse(content=updated)
+
 
 
 @router.websocket("/ws/incidents")
