@@ -21,6 +21,8 @@ def main():
         except OSError:
             pass
             
+    from database import init_db
+    init_db(orchestrator.db_path)
     app = create_app()
     client = TestClient(app)
 
@@ -62,12 +64,15 @@ def main():
         print("VERIFIED")
 
     finally:
-        # Ensure test database cleanup
-        if os.path.exists(orchestrator.db_path):
-            try:
-                os.remove(orchestrator.db_path)
-            except OSError:
-                pass
+        # Ensure test database cleanup including WAL and SHM files
+        if 'orchestrator' in locals() or 'orchestrator' in globals():
+            for suffix in ["", "-wal", "-shm"]:
+                p = orchestrator.db_path + suffix
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
 
 if __name__ == "__main__":
     main()

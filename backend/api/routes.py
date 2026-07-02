@@ -56,7 +56,7 @@ async def health():
 @router.post("/ingest")
 async def ingest(payload: dict):
     source = payload.get("source") if isinstance(payload, dict) else None
-    result = orchestrator.start_pipeline(source=source)
+    result = await run_in_threadpool(orchestrator.start_pipeline, source)
     await manager.broadcast(result)
     return JSONResponse(content=result)
 

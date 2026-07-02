@@ -45,9 +45,13 @@ async def on_startup():
     loop = asyncio.get_event_loop()
     
     def _bg():
+        import sys
         for filename, line in orchestrator.collector.watch():
-            result = orchestrator.start_pipeline(source=filename, raw_line=line)
-            asyncio.run_coroutine_threadsafe(manager.broadcast(result), loop)
+            try:
+                result = orchestrator.start_pipeline(source=filename, raw_line=line)
+                asyncio.run_coroutine_threadsafe(manager.broadcast(result), loop)
+            except Exception as e:
+                print(f"Error processing background log line: {e}", file=sys.stderr)
             
     threading.Thread(target=_bg, daemon=True).start()
 

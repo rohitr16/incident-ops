@@ -47,8 +47,10 @@ export default function IncidentDashboard() {
   useEffect(() => {
     let ws;
     let reconnectTimeout;
+    let isCleanedUp = false;
     
     const connect = () => {
+      if (isCleanedUp) return;
       try {
         ws = new WebSocket(WS_URL);
         ws.addEventListener('open', () => {
@@ -57,8 +59,10 @@ export default function IncidentDashboard() {
         });
         ws.addEventListener('close', () => {
           setConnected(false);
-          log('WS Disconnected, reconnecting in 3s...');
-          reconnectTimeout = setTimeout(connect, 3000);
+          if (!isCleanedUp) {
+            log('WS Disconnected, reconnecting in 3s...');
+            reconnectTimeout = setTimeout(connect, 3000);
+          }
         });
         ws.addEventListener('error', () => {
           setConnected(false);
@@ -79,12 +83,15 @@ export default function IncidentDashboard() {
         });
       } catch (e) {
         log(`WS error: ${e?.message || e}`);
-        reconnectTimeout = setTimeout(connect, 3000);
+        if (!isCleanedUp) {
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
       }
     };
     
     connect();
     return () => {
+      isCleanedUp = true;
       if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };

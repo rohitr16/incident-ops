@@ -69,8 +69,13 @@ def main():
         assert resolved["resolution"]["status"] == "resolved"
         assert resolved["resolution"]["steps_executed"] == ["Step A", "Step B"]
     finally:
-        if os.path.exists(db_test_path):
-            os.remove(db_test_path)
+        for suffix in ["", "-wal", "-shm"]:
+            p = db_test_path + suffix
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
 
     print("VERIFIED")
 

@@ -46,7 +46,6 @@ def init_db(db_path: str = "data/incidents.db") -> None:
             conn.close()
 
 def save_incident(incident: Dict[str, Any], db_path: str = "data/incidents.db") -> Dict[str, Any]:
-    init_db(db_path)
     conn = None
     with db_write_lock:
         try:
@@ -94,7 +93,6 @@ def save_incident(incident: Dict[str, Any], db_path: str = "data/incidents.db") 
     return updated_incident
 
 def get_all_incidents(db_path: str = "data/incidents.db") -> List[Dict[str, Any]]:
-    init_db(db_path)
     conn = None
     try:
         with sqlite3.connect(db_path, timeout=10.0) as conn:
