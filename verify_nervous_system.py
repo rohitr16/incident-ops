@@ -1,6 +1,9 @@
 import os
 import sys
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(REPO_ROOT, "backend")
@@ -60,6 +63,52 @@ def main():
         assert resp_resolve.status_code == 200, resp_resolve.text
         body_resolve = resp_resolve.json()
         assert body_resolve["resolution"]["status"] == "resolved"
+
+        # 4. LLM integration & fallback verification
+        # Verify llm_service is initialized on orchestrator
+        assert hasattr(orchestrator, "llm_service"), "orchestrator does not have llm_service"
+        from services.llm import LLMService
+        assert isinstance(orchestrator.llm_service, LLMService), "orchestrator.llm_service is not an instance of LLMService"
+        print("[PASS] LLMService initialization checked")
+
+        # Test case A: LLM succeeds (returns specific mock output)
+        original_analyze = orchestrator.llm_service.analyze_incident
+        async def mock_success_analyze(raw_line, severity):
+            return {
+                "category": "Storage",
+                "priority": "P1",
+                "recommendation": "Mocked LLM recommendation"
+            }
+        orchestrator.llm_service.analyze_incident = mock_success_analyze
+        try:
+            resp_success = client.post("/ingest", json={"source": "test_llm_success.log"})
+            assert resp_success.status_code == 200, f"success ingest failed: {resp_success.text}"
+            body_success = resp_success.json()
+            assert body_success["triage"]["category"] == "Storage"
+            assert body_success["triage"]["priority"] == "P1"
+            assert body_success["resolution"]["recommendation"] == "Mocked LLM recommendation"
+            print("[PASS] Ingest pipeline with LLM success")
+        finally:
+            orchestrator.llm_service.analyze_incident = original_analyze
+
+        # Test case B: LLM fails (raises Exception) -> Fallback should happen
+        async def mock_fail_analyze(raw_line, severity):
+            raise RuntimeError("Simulated LLM failure")
+        orchestrator.llm_service.analyze_incident = mock_fail_analyze
+        try:
+            resp_fail = client.post("/ingest", json={"source": "test_llm_fail.log"})
+            assert resp_fail.status_code == 200, f"fail ingest failed: {resp_fail.text}"
+            body_fail = resp_fail.json()
+            # Triage and resolution should fall back to rules
+            expected_triage = orchestrator.triage_agent.transform(body_fail["detection"])
+            expected_res = orchestrator.resolution_engine.resolve(expected_triage)
+            
+            assert body_fail["triage"]["category"] == expected_triage["category"]
+            assert body_fail["triage"]["priority"] == expected_triage["priority"]
+            assert body_fail["resolution"]["recommendation"] == expected_res["recommendation"]
+            print("[PASS] Ingest pipeline with LLM fallback")
+        finally:
+            orchestrator.llm_service.analyze_incident = original_analyze
 
         print("VERIFIED")
 

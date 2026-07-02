@@ -15,6 +15,7 @@ class IncidentOrchestrator:
         from agents.triage import TriageAgent
         from agents.resolver import build_default_engine, ResolutionEngine
         from agents.communicator import NotificationAgent
+        from services.llm import LLMService
 
         self.logs_dir: str = os.path.abspath(logs_dir)
         self.db_path: str = os.path.join(_REPO_ROOT, "data", "incidents.db")
@@ -24,6 +25,7 @@ class IncidentOrchestrator:
         self.triage_agent: TriageAgent = TriageAgent()
         self.resolution_engine: ResolutionEngine = build_default_engine()
         self.notification_agent: NotificationAgent = NotificationAgent()
+        self.llm_service: LLMService = LLMService()
         
         from database import init_db
         init_db(self.db_path)
@@ -58,15 +60,39 @@ class IncidentOrchestrator:
         else:
             detection = {"is_incident": False, "severity": "UNKNOWN", "category": None, "reasoning": "Detection stage failed."}
 
-        triage, err = self._run_stage("triage", self.triage_agent.transform, detection)
-        if not isinstance(triage, dict):
-            triage = dict(detection)
-            triage["category"] = triage.get("category") or "Application"
-            triage["priority"] = triage.get("priority") or "P4"
-
-        resolution, err = self._run_stage("resolve", self.resolution_engine.resolve, triage)
-        if not isinstance(resolution, dict):
-            resolution = {"status": "pending", "playbook_used": None, "steps_executed": [], "recommendation": "Resolution stage failed."}
+        triage = None
+        resolution = None
+        if detection.get("is_incident"):
+            try:
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                llm_result = loop.run_until_complete(
+                    self.llm_service.analyze_incident(raw_line or "", detection.get("severity", "UNKNOWN"))
+                )
+                
+                triage = dict(detection)
+                triage["category"] = llm_result.get("category", "Application")
+                triage["priority"] = llm_result.get("priority", "P4")
+                
+                resolution = {
+                    "status": "pending",
+                    "playbook_used": self.resolution_engine.resolve(triage).get("playbook_used") or [],
+                    "steps_executed": [],
+                    "recommendation": llm_result.get("recommendation", "")
+                }
+            except Exception as e:
+                import sys
+                print(f"LLM analysis failed, falling back to rule-based: {e}", file=sys.stderr)
+                triage = self.triage_agent.transform(detection)
+                resolution = self.resolution_engine.resolve(triage)
+        else:
+            triage = self.triage_agent.transform(detection)
+            resolution = self.resolution_engine.resolve(triage)
 
         notification_text, err = self._run_stage("notify", self.notification_agent.format_alert, triage, resolution)
         if not isinstance(notification_text, str):
