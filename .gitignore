@@ -10,3 +10,4 @@ dist/
 *.log
 logs/
 data/samples/*.log
+.superpowers/
