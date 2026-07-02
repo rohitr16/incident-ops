@@ -1,0 +1,49 @@
+<h2>Dashboard Layout Direction</h2>
+<p class="subtitle">Select the design direction that best fits the POC requirements.</p>
+
+<div class="options">
+  <div class="option" data-choice="split" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Split-Screen Control Center (Recommended)</h3>
+      <p>A dual-pane layout built for active monitoring and triage. The left pane hosts a live list of incident cards; clicking a card loads it into the right-pane inspector, which displays raw logs, classification metadata, and matching runbook actions.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="grid" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Metrics & Grid Dashboard</h3>
+      <p>A grid-based dashboard focused on overall system health. Displays high-level KPI cards at the top (Active Incidents, MTTResolve, SLA compliance, etc.), followed by a grid of incident cards grouped by category or severity. Click to open details in a modal.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="unified" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Unified Centered Feed</h3>
+      <p>A clean, single-column feed showing incidents as a chronological timeline. Each incident card expands inline with smooth accordion transitions to reveal matching resolution actions and triage logic. Minimalist and focused.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Pros & Cons Comparison</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Option A: Split-Screen</div>
+      <div class="mockup-body" style="padding: 10px; font-size: 13px;">
+        <p style="color: #00d68f; margin-bottom: 5px;"><strong>Pros:</strong> Excellent for deep inspection; keeps log context visible while executing playbooks; matches real-world NOC/ops tools.</p>
+        <p style="color: #ff3d71;"><strong>Cons:</strong> Requires more desktop screen space; can look complex on small screens.</p>
+      </div>
+    </div>
+    
+    <div class="mockup">
+      <div class="mockup-header">Option B: Grid & Metrics</div>
+      <div class="mockup-body" style="padding: 10px; font-size: 13px;">
+        <p style="color: #00d68f; margin-bottom: 5px;"><strong>Pros:</strong> Immediate overview of metrics; clear visual cues on volume of issues; great for executives/managers.</p>
+        <p style="color: #ff3d71;"><strong>Cons:</strong> Triage and playbook actions are hidden behind modals, adding extra clicks.</p>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+node_modules/
+.next/
+out/
+build/
+dist/
+*.log
+logs/
+data/samples/*.log

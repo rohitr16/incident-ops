@@ -1,0 +1,311 @@
+<h2>Design Section 3: Frontend UI & Interactive Checkbox List</h2>
+<p class="subtitle">We proposed a two-column Split View. Try clicking the incidents in the feed and checking off the playbook steps below to see how progress tracking and resolution work.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Interactive Preview: Operations Dashboard Layout</div>
+  <div class="mockup-body" style="padding: 0; background: var(--bg-primary); display: flex; flex-direction: column; min-height: 520px; font-family: system-ui, -apple-system, sans-serif;">
+    
+    <!-- Top OCC Header -->
+    <div style="background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 0.75rem 1.25rem; display: flex; justify-content: space-between; align-items: center;">
+      <div style="font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+        <span style="color: var(--accent); font-size: 1.3rem;">⚡</span> Ops-Center Portal
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
+        <span style="display: inline-block; width: 8px; height: 8px; background: var(--success); border-radius: 50%;"></span>
+        Live WebSocket Connected
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div style="display: flex; flex: 1; min-height: 460px;">
+      
+      <!-- Left Panel: Feed -->
+      <div id="feed-panel" style="width: 45%; border-right: 1px solid var(--border); padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-secondary); overflow-y: auto;">
+        <div style="font-weight: 600; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+          Active Incidents
+        </div>
+        
+        <!-- INC-1 Card -->
+        <div id="feed-card-1" class="feed-card active" onclick="selectIncident(1)" style="border: 2px solid var(--accent); border-radius: 8px; padding: 0.85rem; background: var(--bg-primary); cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.25rem;">
+            <span style="font-weight: 700; font-size: 0.85rem;" id="card-title-1">INC-1: Storage Overload</span>
+            <span id="badge-1" style="background: var(--error); color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">CRITICAL</span>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Source: db_replica_01</div>
+          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+            <span>Playbook Progress</span>
+            <span id="pct-1">40%</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+            <div id="bar-1" style="width: 40%; height: 100%; background: var(--error); transition: width 0.3s, background-color 0.3s;"></div>
+          </div>
+        </div>
+
+        <!-- INC-2 Card -->
+        <div id="feed-card-2" class="feed-card" onclick="selectIncident(2)" style="border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem; background: var(--bg-secondary); cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.25rem;">
+            <span style="font-weight: 700; font-size: 0.85rem;" id="card-title-2">INC-2: Network Timeout</span>
+            <span id="badge-2" style="background: var(--warning); color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">HIGH</span>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Source: api_gateway</div>
+          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+            <span>Playbook Progress</span>
+            <span id="pct-2">0%</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+            <div id="bar-2" style="width: 0%; height: 100%; background: var(--warning); transition: width 0.3s, background-color 0.3s;"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Inspector -->
+      <div id="inspector-panel" style="width: 55%; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;">
+        <!-- Details show up here -->
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+  .feed-card:hover {
+    border-color: var(--accent) !important;
+  }
+  .playbook-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    font-size: 0.85rem;
+  }
+  .playbook-step:hover {
+    background: var(--bg-tertiary);
+  }
+  .playbook-step.checked {
+    border-color: var(--success);
+    background: rgba(52, 199, 89, 0.08);
+  }
+  .playbook-step input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--success);
+    cursor: pointer;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.85rem;
+    font-size: 0.8rem;
+  }
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+  }
+  .meta-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  .meta-val {
+    font-weight: 500;
+    margin-top: 0.1rem;
+  }
+</style>
+
+<script>
+  // State representation for the mockup
+  const state = {
+    selectedId: 1,
+    incidents: {
+      1: {
+        id: "INC-1",
+        title: "Storage Overload",
+        source: "db_replica_01",
+        severity: "CRITICAL",
+        category: "Storage",
+        priority: "P0",
+        timestamp: "2026-07-02 15:20:00",
+        playbook: [
+          "Audit disk consumption by directory",
+          "Purge rotated logs exceeding retention",
+          "Compress inactive datasets",
+          "Expand persistent volume capacity",
+          "Set disk usage alert at 80% threshold"
+        ],
+        executed: [0, 1], // first two checked
+        status: "pending"
+      },
+      2: {
+        id: "INC-2",
+        title: "Network Timeout",
+        source: "api_gateway",
+        severity: "HIGH",
+        category: "Network",
+        priority: "P1",
+        timestamp: "2026-07-02 15:24:12",
+        playbook: [
+          "Verify upstream service health endpoints",
+          "Check DNS resolution for affected hosts",
+          "Review network peering logs for packet loss",
+          "Restart border routers if anomalous"
+        ],
+        executed: [],
+        status: "pending"
+      }
+    }
+  };
+
+  function selectIncident(id) {
+    state.selectedId = id;
+    
+    // Update active card styling
+    document.querySelectorAll('.feed-card').forEach(c => {
+      c.classList.remove('active');
+      c.style.background = 'var(--bg-secondary)';
+      c.style.borderColor = 'var(--border)';
+      c.style.borderWidth = '1px';
+    });
+    
+    const activeCard = document.getElementById(`feed-card-${id}`);
+    if (activeCard) {
+      activeCard.classList.add('active');
+      activeCard.style.background = 'var(--bg-primary)';
+      activeCard.style.borderColor = 'var(--accent)';
+      activeCard.style.borderWidth = '2px';
+    }
+    
+    renderInspector();
+  }
+
+  function toggleStep(stepIndex) {
+    const inc = state.incidents[state.selectedId];
+    const idx = inc.executed.indexOf(stepIndex);
+    if (idx > -1) {
+      inc.executed.splice(idx, 1);
+    } else {
+      inc.executed.push(stepIndex);
+    }
+    
+    // Update progress bars & details
+    updateProgress(state.selectedId);
+    renderInspector();
+  }
+
+  function updateProgress(id) {
+    const inc = state.incidents[id];
+    const pct = Math.round((inc.executed.length / inc.playbook.length) * 100);
+    
+    // Update text
+    document.getElementById(`pct-${id}`).innerText = `${pct}%`;
+    
+    // Update bar
+    const bar = document.getElementById(`bar-${id}`);
+    bar.style.width = `${pct}%`;
+    
+    // Update color based on status/pct
+    if (inc.status === "resolved") {
+      bar.style.backgroundColor = 'var(--success)';
+    } else {
+      bar.style.backgroundColor = inc.severity === 'CRITICAL' ? 'var(--error)' : 'var(--warning)';
+    }
+  }
+
+  function resolveIncident() {
+    const inc = state.incidents[state.selectedId];
+    inc.status = "resolved";
+    inc.executed = inc.playbook.map((_, i) => i); // check all
+    
+    // Update badge & title in feed card
+    const cardTitle = document.getElementById(`card-title-${state.selectedId}`);
+    cardTitle.innerHTML = `<del>${inc.id}: ${inc.title}</del> <span style="color: var(--success); font-size: 0.75rem; margin-left: 0.25rem;">(Resolved)</span>`;
+    
+    const badge = document.getElementById(`badge-${state.selectedId}`);
+    badge.style.background = 'var(--success)';
+    badge.innerText = 'RESOLVED';
+    
+    updateProgress(state.selectedId);
+    renderInspector();
+    
+    // Call system callback for tracking selection
+    if (typeof toggleSelect === 'function') {
+      toggleSelect({ dataset: { choice: `resolve-${inc.id}` } });
+    }
+  }
+
+  function renderInspector() {
+    const inc = state.incidents[state.selectedId];
+    const panel = document.getElementById('inspector-panel');
+    
+    if (!inc) {
+      panel.innerHTML = `<div>Select an incident from the feed to inspect details.</div>`;
+      return;
+    }
+    
+    const isResolved = inc.status === "resolved";
+    
+    let stepsHtml = '';
+    inc.playbook.forEach((step, idx) => {
+      const isChecked = inc.executed.includes(idx);
+      stepsHtml += `
+        <div class="playbook-step ${isChecked ? 'checked' : ''}" onclick="toggleStep(${idx})">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStep(${idx})">
+          <span style="${isChecked ? 'text-decoration: line-through; color: var(--text-secondary);' : ''}">${step}</span>
+        </div>
+      `;
+    });
+
+    panel.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">
+        <h3 style="margin: 0; font-size: 1.15rem;">${inc.id}: ${inc.title}</h3>
+        <span style="font-size: 0.75rem; color: var(--text-secondary);">${inc.timestamp}</span>
+      </div>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span class="meta-label">Severity</span>
+          <span class="meta-val" style="color: ${inc.severity === 'CRITICAL' ? 'var(--error)' : 'var(--warning)'}">${inc.severity}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Priority</span>
+          <span class="meta-val">${inc.priority}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Category</span>
+          <span class="meta-val">${inc.category}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Source Host</span>
+          <span class="meta-val"><code>${inc.source}</code></span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-weight: 600; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+          Playbook Checklist
+        </div>
+        ${stepsHtml}
+      </div>
+
+      <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button onclick="resolveIncident()" class="mock-button" style="background: ${isResolved ? 'var(--bg-tertiary)' : 'var(--success)'}; color: ${isResolved ? 'var(--text-secondary)' : 'white'}; cursor: ${isResolved ? 'not-allowed' : 'pointer'}" ${isResolved ? 'disabled' : ''}>
+          ${isResolved ? '✓ Resolved' : 'Mark as Resolved'}
+        </button>
+      </div>
+    `;
+  }
+
+  // Initial render
+  selectIncident(1);
+</script>
