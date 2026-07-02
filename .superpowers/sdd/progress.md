@@ -1,5 +1,5 @@
-# Progress Ledger
+# Progress Ledger - LLM Integration
 
-- Task 1: complete (commits a2ae229..fe36046, review clean)
-- Task 2: complete (commits 7a1f25b..8493c8b, review clean)
-- Task 3: complete (commits c749377..d8c2e52, review clean)
+- Task 1: pending
+- Task 2: pending
+- Task 3: pending
