@@ -1,0 +1,28 @@
+<h2>Select Agent Workflow UI Layout</h2>
+<p class="subtitle">Choose how you want the incident details page to display the multi-agent graph and agent statuses</p>
+
+<div class="options">
+  <div class="option" data-choice="sidebar" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Collapsible Right Agent Sidebar</h3>
+      <p>A persistent vertical timeline on the right side of the details page showing the progress of each agent (SmartQueue, Knowledge, AutoInfra, Compliance) with live spinners and agent logs.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="tabs" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Tabbed Panel ("Details" vs "Agent Trace")</h3>
+      <p>Adds tabs to the main panel. One tab shows the standard incident details and manual playbook; the second tab displays a larger, interactive graph diagram of the LangGraph path with agent execution details.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="inline" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Top Header inline Status Bar</h3>
+      <p>A compact horizontal status bar at the top of the details panel showing the active agent and its status, keeping the layout simple and close to the original design.</p>
+    </div>
+  </div>
+</div>
