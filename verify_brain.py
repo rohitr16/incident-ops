@@ -8,6 +8,17 @@ from agents.detector import IncidentDetector
 from agents.transformer import LogTransformer
 from database import init_db, save_incident, get_all_incidents
 
+import asyncio
+
+async def test_llm_service():
+    from services.llm import LLMService
+    # Test fallback to empty/mock on invalid config
+    svc = LLMService(provider="mock", model="mock")
+    res = await svc.analyze_incident("Connection timeout to DB", "ERROR")
+    assert res["category"] == "Application"
+    assert res["priority"] == "P1"
+    assert "Connection timeout" in res["recommendation"]
+
 def main():
     transformer = LogTransformer()
     detector = IncidentDetector()
@@ -77,6 +88,7 @@ def main():
                 except OSError:
                     pass
 
+    asyncio.run(test_llm_service())
     print("VERIFIED")
 
 if __name__ == "__main__":
