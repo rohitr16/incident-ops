@@ -49,12 +49,17 @@ async def on_startup():
     
     def _bg():
         import sys
+        from concurrent.futures import ThreadPoolExecutor
+        executor = ThreadPoolExecutor(max_workers=5)
+        
         for filename, line in orchestrator.collector.watch():
-            try:
-                result = orchestrator.start_pipeline(source=filename, raw_line=line)
-                asyncio.run_coroutine_threadsafe(manager.broadcast(result), loop)
-            except Exception as e:
-                print(f"Error processing background log line: {e}", file=sys.stderr)
+            def run_job(f_name, l_content):
+                try:
+                    result = orchestrator.start_pipeline(source=f_name, raw_line=l_content)
+                    asyncio.run_coroutine_threadsafe(manager.broadcast(result), loop)
+                except Exception as e:
+                    print(f"Error processing background log line: {e}", file=sys.stderr)
+            executor.submit(run_job, filename, line)
             
     threading.Thread(target=_bg, daemon=True).start()
 

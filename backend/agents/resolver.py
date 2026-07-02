@@ -25,7 +25,28 @@ class ResolutionEngine:
                 "recommendation": "No incident detected; monitor."
             }
 
-        key = (category, severity)
+        # Normalize category and severity to match playbook registry keys
+        norm_cat = "Application crash"
+        c_low = str(category).lower()
+        if "network" in c_low:
+            norm_cat = "Network timeout"
+        elif "security" in c_low:
+            norm_cat = "Security breach"
+        elif "compute" in c_low:
+            norm_cat = "Compute overload"
+        elif "storage" in c_low:
+            norm_cat = "Storage full"
+        elif "db" in c_low or "database" in c_low:
+            norm_cat = "Storage full"
+
+        norm_sev = "medium"
+        s_upper = str(severity).upper()
+        if s_upper in ("CRITICAL", "FATAL", "P0", "P1"):
+            norm_sev = "critical"
+        elif s_upper in ("ERROR", "WARNING", "HIGH", "P2"):
+            norm_sev = "high"
+
+        key = (norm_cat, norm_sev)
         steps = self._registry.get(key, [])
 
         if key not in self._registry:

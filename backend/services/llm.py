@@ -56,14 +56,27 @@ class LLMService:
         
         self.triage_agent = TriageAgent()
         self.resolver = build_default_engine()
-        
-        if self.provider in ("openai", "ollama", "lmstudio"):
+
+    def _get_openai_client(self):
+        """Lazily instantiates OpenAI client with request timeouts and provider validation."""
+        if not self.openai_client:
             from openai import OpenAI
-            # Use base_url for local models
-            self.openai_client = OpenAI(api_key=self.api_key or "mock-key", base_url=self.base_url)
-        elif self.provider == "gemini":
+            client_kwargs = {"api_key": self.api_key or "mock-key", "timeout": 10.0}
+            # Only use custom base_url for local model environments
+            if self.provider in ("ollama", "lmstudio") and self.base_url:
+                client_kwargs["base_url"] = self.base_url
+            self.openai_client = OpenAI(**client_kwargs)
+        return self.openai_client
+
+    def _get_gemini_client(self):
+        """Lazily instantiates Google GenAI client with request timeouts."""
+        if not self.gemini_client:
             from google import genai
-            self.gemini_client = genai.Client(api_key=self.api_key)
+            self.gemini_client = genai.Client(
+                api_key=self.api_key or "mock-key",
+                http_options={"timeout": 10.0}
+            )
+        return self.gemini_client
 
     def _rule_based_fallback(self, raw_line: str, severity: str) -> Dict[str, Any]:
         """Runs the rule-based agent pipeline as a fallback or mock response."""
@@ -96,10 +109,11 @@ Analyze the incident and respond with a structured JSON object containing:
 """
         
         try:
-            if self.openai_client:
+            if self.provider in ("openai", "ollama", "lmstudio"):
+                client = self._get_openai_client()
                 # Run synchronous API call in a thread pool to avoid blocking the event loop
                 response = await asyncio.to_thread(
-                    self.openai_client.chat.completions.create,
+                    client.chat.completions.create,
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"}
@@ -111,10 +125,11 @@ Analyze the incident and respond with a structured JSON object containing:
                     "recommendation": str(data.get("recommendation", ""))
                 }
                 
-            elif self.gemini_client:
+            elif self.provider == "gemini":
+                client = self._get_gemini_client()
                 from google.genai import types
                 response = await asyncio.to_thread(
-                    self.gemini_client.models.generate_content,
+                    client.models.generate_content,
                     model=self.model,
                     contents=prompt,
                     config=types.GenerateContentConfig(
