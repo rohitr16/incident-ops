@@ -20,10 +20,37 @@ class LLMService:
     def __init__(self, provider: str = None, model: str = None, base_url: str = None, api_key: str = None):
         load_dotenv()
         self.provider = provider or os.getenv("LLM_PROVIDER", "mock")
-        self.model = model or os.getenv("LLM_MODEL", "mock")
         self.base_url = base_url or os.getenv("LLM_BASE_URL")
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
         
+        # Conditionally resolve API key based on selected provider
+        if api_key:
+            self.api_key = api_key
+        elif self.provider in ("openai", "ollama", "lmstudio"):
+            self.api_key = os.getenv("OPENAI_API_KEY")
+        elif self.provider == "gemini":
+            self.api_key = os.getenv("GEMINI_API_KEY")
+        else:
+            self.api_key = None
+            
+        # Provider-specific default models if not specified
+        if not model:
+            env_model = os.getenv("LLM_MODEL")
+            if env_model:
+                self.model = env_model
+            else:
+                if self.provider == "openai":
+                    self.model = "gpt-4o-mini"
+                elif self.provider == "gemini":
+                    self.model = "gemini-2.5-flash"
+                elif self.provider == "ollama":
+                    self.model = "llama3"
+                elif self.provider == "lmstudio":
+                    self.model = "meta-llama-3-8b-instruct"
+                else:
+                    self.model = "mock"
+        else:
+            self.model = model
+            
         self.openai_client = None
         self.gemini_client = None
         
