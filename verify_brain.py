@@ -68,7 +68,12 @@ def main():
     assert resolved["resolution"]["status"] == "resolved"
     assert resolved["resolution"]["steps_executed"] == ["Step A", "Step B"]
 
+    import os
+    if os.path.exists(db_test_path):
+        os.remove(db_test_path)
+
     print("VERIFIED")
 
 if __name__ == "__main__":
     main()
+

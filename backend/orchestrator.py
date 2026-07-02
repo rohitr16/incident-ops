@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import threading
 from typing import Any, Dict, List, Optional
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class IncidentOrchestrator:
@@ -14,14 +17,16 @@ class IncidentOrchestrator:
         from agents.communicator import NotificationAgent
 
         self.logs_dir: str = logs_dir
+        self.db_path: str = os.path.join(_REPO_ROOT, "data", "incidents.db")
         self.collector: LogCollector = LogCollector(logs_dir=logs_dir)
         self.transformer: LogTransformer = LogTransformer()
         self.detector: IncidentDetector = IncidentDetector()
         self.triage_agent: TriageAgent = TriageAgent()
         self.resolution_engine: ResolutionEngine = build_default_engine()
         self.notification_agent: NotificationAgent = NotificationAgent()
+        
         from database import init_db
-        init_db(self.logs_dir.replace('logs', 'data/incidents.db'))
+        init_db(self.db_path)
         self._lock = threading.Lock()
 
     @staticmethod
@@ -81,15 +86,12 @@ class IncidentOrchestrator:
         }
 
         with self._lock:
-            import os
             from database import save_incident
-            db_path = os.path.join(self.logs_dir, "..", "data", "incidents.db")
-            response = save_incident(stored, db_path)
+            response = save_incident(stored, self.db_path)
             return response
 
     @property
     def incidents_store(self) -> List[Dict[str, Any]]:
-        import os
         from database import get_all_incidents
-        db_path = os.path.join(self.logs_dir, "..", "data", "incidents.db")
-        return get_all_incidents(db_path)
+        return get_all_incidents(self.db_path)
+
