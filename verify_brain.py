@@ -106,6 +106,9 @@ def main():
         updated = update_agent_history(1, history_entry, db_test_path)
         assert len(updated["agent_history"]) == 1
         assert updated["agent_history"][0]["node"] == "SmartQueue"
+
+        # Test LangGraph workflow engine
+        asyncio.run(test_langgraph_workflow())
     finally:
         for suffix in ["", "-wal", "-shm"]:
             p = db_test_path + suffix
@@ -117,6 +120,39 @@ def main():
 
     asyncio.run(test_llm_service())
     print("VERIFIED")
+
+async def test_langgraph_workflow():
+    from services.graph import run_langgraph_pipeline
+    db_test_path = "data/test_incidents.db"
+    broadcasts = []
+    async def mock_broadcast(incident):
+        broadcasts.append(incident)
+    
+    # We need to pre-create a pending incident
+    from database import save_incident
+    dummy = {
+        "source": "test_graph.log",
+        "raw_line": "ERROR: database connection error timeout",
+        "structured_log": {"message": "database connection error timeout", "severity": "ERROR"},
+        "detection": {"is_incident": True, "severity": "ERROR"},
+        "triage": {"category": "Application", "priority": "P4"},
+        "resolution": {"status": "pending", "playbook_used": [], "steps_executed": []},
+        "notification": "Alert!"
+    }
+    saved = save_incident(dummy, db_test_path)
+    
+    await run_langgraph_pipeline(
+        incident_id=saved["incident_id"],
+        raw_log="ERROR: database connection error timeout",
+        severity="ERROR",
+        db_path=db_test_path,
+        broadcast_fn=mock_broadcast
+    )
+    
+    assert len(broadcasts) > 0
+    final_incident = broadcasts[-1]
+    assert final_incident["resolution"]["status"] in ("resolved", "escalated")
+    assert len(final_incident["agent_history"]) > 0
 
 if __name__ == "__main__":
     main()
