@@ -63,63 +63,35 @@ class IncidentOrchestrator:
         triage = None
         resolution = None
         if detection.get("is_incident"):
-            try:
-                import asyncio
-                llm_result = asyncio.run(
-                    self.llm_service.analyze_incident(raw_line or "", detection.get("severity", "UNKNOWN"))
-                )
-                
-                triage = dict(detection)
-                triage["category"] = llm_result.get("category", "Application")
-                triage["priority"] = llm_result.get("priority", "P4")
-                
-                resolution = {
-                    "status": "pending",
-                    "playbook_used": self.resolution_engine.resolve(triage).get("playbook_used") or [],
-                    "steps_executed": [],
-                    "recommendation": llm_result.get("recommendation", "")
-                }
-            except Exception as e:
-                import sys
-                print(f"LLM analysis failed, falling back to rule-based: {e}", file=sys.stderr)
-                triage, err = self._run_stage("triage", self.triage_agent.transform, detection)
-                if not isinstance(triage, dict):
-                    triage = dict(detection)
-                    triage["category"] = triage.get("category") or "Application"
-                    triage["priority"] = triage.get("priority") or "P4"
-                resolution, err = self._run_stage("resolve", self.resolution_engine.resolve, triage)
-                if not isinstance(resolution, dict):
-                    resolution = {"status": "pending", "playbook_used": [], "steps_executed": [], "recommendation": "Resolution stage failed."}
+            from database import save_incident, _get_incident_by_id
+            stored: Dict[str, Any] = {
+                "source": source or structured_log_value.get("source"),
+                "raw_line": raw_line,
+                "structured_log": structured_log_value,
+                "detection": detection,
+                "triage": {"category": "Application", "priority": "P4"},
+                "resolution": {"status": "pending", "playbook_used": [], "steps_executed": []},
+                "notification": "Incident Detected",
+                "agent_history": []
+            }
+            with self._lock:
+                incident = save_incident(stored, self.db_path)
+            
+            # Run LangGraph workflow synchronously for the watcher thread
+            import asyncio
+            from services.graph import run_langgraph_pipeline
+            asyncio.run(run_langgraph_pipeline(
+                incident_id=incident["incident_id"],
+                raw_log=raw_line or "",
+                severity=detection.get("severity", "ERROR"),
+                db_path=self.db_path,
+                broadcast_fn=None,
+                llm_service=self.llm_service
+            ))
+            
+            return _get_incident_by_id(incident["incident_id"], self.db_path)
         else:
-            triage, err = self._run_stage("triage", self.triage_agent.transform, detection)
-            if not isinstance(triage, dict):
-                triage = dict(detection)
-                triage["category"] = triage.get("category") or "Application"
-                triage["priority"] = triage.get("priority") or "P4"
-            resolution, err = self._run_stage("resolve", self.resolution_engine.resolve, triage)
-            if not isinstance(resolution, dict):
-                resolution = {"status": "pending", "playbook_used": [], "steps_executed": [], "recommendation": "Resolution stage failed."}
-
-        notification_text, err = self._run_stage("notify", self.notification_agent.format_alert, triage, resolution)
-        if not isinstance(notification_text, str):
-            notification_text = "Notification formatting failed."
-
-        stored: Dict[str, Any] = {
-            "incident_id": None,
-            "source": source or structured_log_value.get("source"),
-            "raw_line": raw_line,
-            "structured_log": structured_log_value,
-            "detection": detection,
-            "triage": triage,
-            "resolution": resolution,
-            "notification": notification_text,
-            "error": None,
-        }
-
-        with self._lock:
-            from database import save_incident
-            response = save_incident(stored, self.db_path)
-            return response
+            return {"status": "ignored", "reason": "Not an incident"}
 
     @property
     def incidents_store(self) -> List[Dict[str, Any]]:

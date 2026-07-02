@@ -50,6 +50,13 @@ def main():
         missing = required - set(body.keys())
         assert not missing, f"Missing keys in response: {missing}"
         incident_id = body["incident_id"]
+        assert body["resolution"]["status"] == "pending"
+
+        # Verify background execution finished using /incidents
+        list_res = client.get("/incidents")
+        incidents = list_res.json()
+        ingested = next(inc for inc in incidents if inc["incident_id"] == incident_id)
+        assert ingested["resolution"]["status"] in ("resolved", "escalated")
 
         # Test step execution endpoint
         steps_payload = {"steps_executed": ["Step A"]}
@@ -84,9 +91,13 @@ def main():
             resp_success = client.post("/ingest", json={"source": "test_llm_success.log"})
             assert resp_success.status_code == 200, f"success ingest failed: {resp_success.text}"
             body_success = resp_success.json()
-            assert body_success["triage"]["category"] == "Storage"
-            assert body_success["triage"]["priority"] == "P1"
-            assert body_success["resolution"]["recommendation"] == "Mocked LLM recommendation"
+            assert body_success["resolution"]["status"] == "pending"
+
+            list_res = client.get("/incidents")
+            success_incident = next(inc for inc in list_res.json() if inc["source"] == "test_llm_success.log")
+            assert success_incident["triage"]["category"] == "Storage"
+            assert success_incident["triage"]["priority"] == "P1"
+            assert success_incident["resolution"]["recommendation"] == "Mocked LLM recommendation"
             print("[PASS] Ingest pipeline with LLM success")
         finally:
             orchestrator.llm_service.analyze_incident = original_analyze
@@ -99,13 +110,17 @@ def main():
             resp_fail = client.post("/ingest", json={"source": "test_llm_fail.log"})
             assert resp_fail.status_code == 200, f"fail ingest failed: {resp_fail.text}"
             body_fail = resp_fail.json()
+            assert body_fail["resolution"]["status"] == "pending"
+
+            list_res = client.get("/incidents")
+            fail_incident = next(inc for inc in list_res.json() if inc["source"] == "test_llm_fail.log")
             # Triage and resolution should fall back to rules
-            expected_triage = orchestrator.triage_agent.transform(body_fail["detection"])
+            expected_triage = orchestrator.triage_agent.transform(fail_incident["detection"])
             expected_res = orchestrator.resolution_engine.resolve(expected_triage)
             
-            assert body_fail["triage"]["category"] == expected_triage["category"]
-            assert body_fail["triage"]["priority"] == expected_triage["priority"]
-            assert body_fail["resolution"]["recommendation"] == expected_res["recommendation"]
+            assert fail_incident["triage"]["category"] == expected_triage["category"]
+            assert fail_incident["triage"]["priority"] == expected_triage["priority"]
+            assert fail_incident["resolution"]["recommendation"] == expected_res["recommendation"]
             print("[PASS] Ingest pipeline with LLM fallback")
         finally:
             orchestrator.llm_service.analyze_incident = original_analyze

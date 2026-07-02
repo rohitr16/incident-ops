@@ -1,7 +1,7 @@
 import sys
 import os
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 
@@ -54,11 +54,55 @@ async def health():
 
 
 @router.post("/ingest")
-async def ingest(payload: dict):
+async def ingest(payload: dict, background_tasks: BackgroundTasks):
     source = payload.get("source") if isinstance(payload, dict) else None
-    result = await run_in_threadpool(orchestrator.start_pipeline, source)
-    await manager.broadcast(result)
-    return JSONResponse(content=result)
+    raw_line = payload.get("raw_line") if isinstance(payload, dict) else None
+    if not raw_line and source and source.endswith(".log"):
+        raw_line = f"2026-07-01 12:00:00 ERROR {source}: simulated error line"
+        
+    # 1. Transform raw log line
+    from agents.transformer import LogTransformer
+    from agents.detector import IncidentDetector
+    transformer = LogTransformer()
+    detector = IncidentDetector()
+    
+    structured = transformer.transform(raw_line or "")
+    detection = detector.transform(structured)
+    
+    if not detection.get("is_incident"):
+        return JSONResponse(content={"status": "ignored", "reason": "Not an incident"})
+        
+    # 2. Save base pending incident to DB
+    from database import save_incident
+    dummy = {
+        "source": source or "unknown",
+        "raw_line": raw_line or "",
+        "structured_log": structured,
+        "detection": detection,
+        "triage": {"category": "Application", "priority": "P4"},
+        "resolution": {"status": "pending", "playbook_used": [], "steps_executed": []},
+        "notification": "Incident Detected",
+        "agent_history": []
+    }
+    # Save to SQLite
+    incident = await run_in_threadpool(save_incident, dummy, orchestrator.db_path)
+    
+    # 3. Broadcast initial incident via WebSockets
+    await manager.broadcast(incident)
+    
+    # 4. Trigger LangGraph background task
+    from services.graph import run_langgraph_pipeline
+    background_tasks.add_task(
+        run_langgraph_pipeline,
+        incident["incident_id"],
+        raw_line or "",
+        detection.get("severity", "ERROR"),
+        orchestrator.db_path,
+        manager.broadcast,
+        orchestrator.llm_service
+    )
+    
+    return JSONResponse(content=incident)
 
 
 @router.get("/incidents")

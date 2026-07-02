@@ -20,6 +20,7 @@ class IncidentState(TypedDict):
     retry_count: int
     db_path: str
     broadcast_fn: Any
+    llm_service: Any
 
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -42,23 +43,45 @@ async def smart_queue_node(state: IncidentState) -> Dict[str, Any]:
     await notify_state(state, "SmartQueue", "running", "Analyzing incident category and priority...")
     await asyncio.sleep(0.5)
     
-    # Triage
-    from agents.triage import TriageAgent
-    triage_agent = TriageAgent()
-    triage_res = triage_agent.transform({
-        "severity": state["severity"],
-        "message": state["raw_log"],
-        "source": "incoming"
-    })
-    category = triage_res.get("category", "Application")
-    priority = triage_res.get("priority", "P4")
-    
+    llm_service = state.get("llm_service")
+    if not llm_service:
+        from services.llm import LLMService
+        llm_service = LLMService()
+    try:
+        llm_res = await llm_service.analyze_incident(state["raw_log"], state["severity"])
+        category = llm_res.get("category", "Application")
+        priority = llm_res.get("priority", "P4")
+    except Exception as e:
+        import sys
+        print(f"smart_queue_node: LLM failed: {e}, falling back to rule-based triage.", file=sys.stderr)
+        from agents.triage import TriageAgent
+        triage_agent = TriageAgent()
+        triage_res = triage_agent.transform({
+            "severity": state["severity"],
+            "message": state["raw_log"],
+            "source": "incoming"
+        })
+        category = triage_res.get("category", "Application")
+        priority = triage_res.get("priority", "P4")
+        
     await notify_state(state, "SmartQueue", "completed", f"Triage complete: Category = {category}, Priority = {priority}")
     return {"category": category, "priority": priority}
 
 async def knowledge_rca_node(state: IncidentState) -> Dict[str, Any]:
     await notify_state(state, "KnowledgeAgent", "running", "Searching for recovery runbook and recommendations...")
     await asyncio.sleep(0.5)
+
+    llm_service = state.get("llm_service")
+    if not llm_service:
+        from services.llm import LLMService
+        llm_service = LLMService()
+    try:
+        llm_res = await llm_service.analyze_incident(state["raw_log"], state["severity"])
+        rec = llm_res.get("recommendation", "")
+    except Exception as e:
+        import sys
+        print(f"knowledge_rca_node: LLM failed: {e}, falling back to rule-based resolution.", file=sys.stderr)
+        rec = ""
 
     # Determine playbook
     from agents.resolver import build_default_engine
@@ -69,7 +92,8 @@ async def knowledge_rca_node(state: IncidentState) -> Dict[str, Any]:
         "severity": state["severity"]
     })
     playbook = res.get("playbook_used") or ["Verify system resources", "Check service logs", "Restart component"]
-    rec = res.get("recommendation", "Review raw logs for exceptions.")
+    if not rec:
+        rec = res.get("recommendation", "Review raw logs for exceptions.")
     
     await notify_state(state, "KnowledgeAgent", "completed", f"Found playbook with {len(playbook)} steps.")
     return {"playbook_steps": playbook, "recommendation": rec}
@@ -122,14 +146,19 @@ def compliance_router(state: IncidentState):
 
 async def finalize_resolution(state: IncidentState, resolution_status: str):
     import sqlite3
+    triage_dict = {
+        "category": state["category"],
+        "priority": state["priority"]
+    }
     with sqlite3.connect(state["db_path"]) as conn:
         conn.execute(
-            "UPDATE incidents SET resolution_status = ?, playbook_steps = ?, steps_executed = ?, recommendation = ? WHERE incident_id = ?",
+            "UPDATE incidents SET resolution_status = ?, playbook_steps = ?, steps_executed = ?, recommendation = ?, triage = ? WHERE incident_id = ?",
             (
                 resolution_status,
                 json.dumps(state["playbook_steps"]),
                 json.dumps(state["steps_executed"]),
                 state["recommendation"],
+                json.dumps(triage_dict),
                 state["incident_id"]
             )
         )
@@ -172,7 +201,7 @@ workflow.add_edge("route_escalate", END)
 
 compiled_graph = workflow.compile()
 
-async def run_langgraph_pipeline(incident_id: int, raw_log: str, severity: str, db_path: str, broadcast_fn: Any) -> None:
+async def run_langgraph_pipeline(incident_id: int, raw_log: str, severity: str, db_path: str, broadcast_fn: Any, llm_service: Any = None) -> None:
     initial_state: IncidentState = {
         "incident_id": incident_id,
         "raw_log": raw_log,
@@ -187,6 +216,7 @@ async def run_langgraph_pipeline(incident_id: int, raw_log: str, severity: str, 
         "status": "pending",
         "retry_count": 0,
         "db_path": db_path,
-        "broadcast_fn": broadcast_fn
+        "broadcast_fn": broadcast_fn,
+        "llm_service": llm_service
     }
     await compiled_graph.ainvoke(initial_state)
