@@ -11,6 +11,7 @@ export default function IncidentDashboard() {
   const [activeIncidentId, setActiveIncidentId] = useState(null);
   const [connected, setConnected] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [debugLog, setDebugLog] = useState([]);
   const pollRef = useRef(null);
 
@@ -189,79 +190,124 @@ export default function IncidentDashboard() {
         </div>
 
         {/* Right Side: Inspector Panel */}
-        <div className="inspector-panel">
+        <div className="inspector-panel" style={activeIncident ? { padding: 0, gap: 0 } : {}}>
           {activeIncident ? (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #d1d1d6', paddingBottom: '0.75rem' }}>
-                <h2 style={{ margin: 0 }}>INC-{activeIncident.incident_id}: {activeIncident.structured_log?.message || 'Storage Overload'}</h2>
-                <span style={{ fontSize: '0.8rem', color: '#86868b' }}>
-                  {activeIncident.structured_log?.timestamp || activeIncident.timestamp || 'N/A'}
-                </span>
-              </div>
-
-              <div className="meta-grid">
-                <div className="meta-item">
-                  <span className="meta-label">Severity</span>
-                  <span className="meta-val" style={{ color: (activeIncident.structured_log?.severity === 'CRITICAL' || activeIncident.structured_log?.severity === 'FATAL') ? '#ff3b30' : '#ff9f0a' }}>
-                    {activeIncident.structured_log?.severity}
-                  </span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Priority</span>
-                  <span className="meta-val">{activeIncident.triage?.priority}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Category</span>
-                  <span className="meta-val">{activeIncident.triage?.category}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Source Host</span>
-                  <span className="meta-val"><code>{activeIncident.source}</code></span>
-                </div>
-              </div>
-
-              {activeIncident.resolution?.playbook_used?.length > 0 ? (
-                <div className="playbook-checklist-container">
-                  <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#86868b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
-                    Playbook Steps
+            <div style={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', overflow: 'hidden' }}>
+              {/* Main incident details */}
+              <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #d1d1d6', paddingBottom: '0.75rem' }}>
+                  <h2 style={{ margin: 0 }}>INC-{activeIncident.incident_id}: {activeIncident.structured_log?.message || 'Storage Overload'}</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#86868b' }}>
+                      {activeIncident.structured_log?.timestamp || activeIncident.timestamp || 'N/A'}
+                    </span>
+                    <button 
+                      onClick={() => setSidebarOpen(!sidebarOpen)}
+                      className="timeline-toggle-button"
+                      style={{
+                        background: 'none',
+                        border: '1px solid #d1d1d6',
+                        borderRadius: '4px',
+                        padding: '4px 8px',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        color: '#007aff'
+                      }}
+                    >
+                      {sidebarOpen ? '➡️ Hide Agent Trace' : '🤖 Show Agent Trace'}
+                    </button>
                   </div>
-                  {activeIncident.resolution.playbook_used.map((step, idx) => {
-                    const isChecked = activeIncident.resolution.steps_executed?.includes(step);
+                </div>
+
+                <div className="meta-grid">
+                  <div className="meta-item">
+                    <span className="meta-label">Severity</span>
+                    <span className="meta-val" style={{ color: (activeIncident.structured_log?.severity === 'CRITICAL' || activeIncident.structured_log?.severity === 'FATAL') ? '#ff3b30' : '#ff9f0a' }}>
+                      {activeIncident.structured_log?.severity}
+                    </span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-label">Priority</span>
+                    <span className="meta-val">{activeIncident.triage?.priority}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-label">Category</span>
+                    <span className="meta-val">{activeIncident.triage?.category}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-label">Source Host</span>
+                    <span className="meta-val"><code>{activeIncident.source}</code></span>
+                  </div>
+                </div>
+
+                {activeIncident.resolution?.playbook_used?.length > 0 ? (
+                  <div className="playbook-checklist-container">
+                    <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#86868b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+                      Playbook Steps
+                    </div>
+                    {activeIncident.resolution.playbook_used.map((step, idx) => {
+                      const isChecked = activeIncident.resolution.steps_executed?.includes(step);
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`playbook-step ${isChecked ? 'checked' : ''}`}
+                          onClick={() => toggleStep(step)}
+                        >
+                          <input 
+                            className="checklist-step-checkbox"
+                            type="checkbox" 
+                            checked={isChecked} 
+                            onChange={() => {}} // handled by click
+                          />
+                          <span style={isChecked ? { textDecoration: 'line-through', color: '#86868b' } : {}}>
+                            {step}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ color: '#86868b', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                    No registered playbook for this incident category/severity.
+                  </div>
+                )}
+
+                <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #d1d1d6', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button 
+                    onClick={resolveIncident} 
+                    disabled={activeIncident.resolution?.status === 'resolved' || isUpdating}
+                    className="resolve-btn"
+                  >
+                    {activeIncident.resolution?.status === 'resolved' ? '✓ Resolved' : 'Mark as Resolved'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Collapsible Agent Timeline Sidebar on Right */}
+              {sidebarOpen && (
+                <div className="agent-timeline-container">
+                  <h3 style={{ marginTop: 0, borderBottom: '1px solid #d1d1d6', paddingBottom: '0.5rem', fontSize: '0.95rem' }}>🤖 Agent Trace</h3>
+                  {['SmartQueue', 'KnowledgeAgent', 'AutoInfra', 'ComplianceAgent'].map(node => {
+                    const history = activeIncident.agent_history || [];
+                    const nodeEvents = history.filter(e => e.node === node);
+                    const lastEvent = nodeEvents[nodeEvents.length - 1];
+                    const status = lastEvent ? lastEvent.status : 'pending';
+                    const message = lastEvent ? lastEvent.message : 'Waiting...';
+                    
                     return (
-                      <div 
-                        key={idx} 
-                        className={`playbook-step ${isChecked ? 'checked' : ''}`}
-                        onClick={() => toggleStep(step)}
-                      >
-                        <input 
-                          className="checklist-step-checkbox"
-                          type="checkbox" 
-                          checked={isChecked} 
-                          onChange={() => {}} // handled by click
-                        />
-                        <span style={isChecked ? { textDecoration: 'line-through', color: '#86868b' } : {}}>
-                          {step}
-                        </span>
+                      <div key={node} className="timeline-node">
+                        <div className={`timeline-status-dot status-${status}`} />
+                        <strong style={{ display: 'block', fontSize: '0.85rem' }}>{node}</strong>
+                        <div style={{ fontSize: '0.75rem', color: '#86868b', marginTop: '0.25rem', lineHeight: '1.2' }}>{message}</div>
                       </div>
                     );
                   })}
                 </div>
-              ) : (
-                <div style={{ color: '#86868b', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                  No registered playbook for this incident category/severity.
-                </div>
               )}
-
-              <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #d1d1d6', display: 'flex', justifyContent: 'flex-end' }}>
-                <button 
-                  onClick={resolveIncident} 
-                  disabled={activeIncident.resolution?.status === 'resolved' || isUpdating}
-                  className="resolve-btn"
-                >
-                  {activeIncident.resolution?.status === 'resolved' ? '✓ Resolved' : 'Mark as Resolved'}
-                </button>
-              </div>
-            </>
+            </div>
           ) : (
             <div className="empty">Select an incident from the feed to inspect.</div>
           )}
