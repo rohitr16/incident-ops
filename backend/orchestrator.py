@@ -20,7 +20,8 @@ class IncidentOrchestrator:
         self.triage_agent: TriageAgent = TriageAgent()
         self.resolution_engine: ResolutionEngine = build_default_engine()
         self.notification_agent: NotificationAgent = NotificationAgent()
-        self.incidents_store: List[Dict[str, Any]] = []
+        from database import init_db
+        init_db(self.logs_dir.replace('logs', 'data/incidents.db'))
         self._lock = threading.Lock()
 
     @staticmethod
@@ -80,8 +81,15 @@ class IncidentOrchestrator:
         }
 
         with self._lock:
-            stored["incident_id"] = len(self.incidents_store) + 1
-            self.incidents_store.append(dict(stored))
+            import os
+            from database import save_incident
+            db_path = os.path.join(self.logs_dir, "..", "data", "incidents.db")
+            response = save_incident(stored, db_path)
+            return response
 
-        response = dict(stored)
-        return response
+    @property
+    def incidents_store(self) -> List[Dict[str, Any]]:
+        import os
+        from database import get_all_incidents
+        db_path = os.path.join(self.logs_dir, "..", "data", "incidents.db")
+        return get_all_incidents(db_path)
