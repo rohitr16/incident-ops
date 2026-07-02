@@ -3,3 +3,7 @@ uvicorn[standard]
 websockets
 sqlalchemy
 pydantic
+python-dotenv
+openai
+google-genai
+

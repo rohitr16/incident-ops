@@ -7,3 +7,6 @@ google-generativeai
 python-dotenv
 pandas
 psycopg2-binary
+openai
+google-genai
+
