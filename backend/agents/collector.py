@@ -24,7 +24,7 @@ class LogCollector:
                         
                         for line in new_lines:
                             if line.strip():
-                                yield line.strip()
+                                yield filename, line.strip()
             time.sleep(1)
 
 if __name__ == "__main__":

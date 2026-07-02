@@ -13,8 +13,7 @@ _REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from api.routes import router as api_router
-from orchestrator import IncidentOrchestrator
+from api.routes import router as api_router, orchestrator
 
 app = FastAPI(title="Incident Dashboard API")
 
@@ -28,7 +27,7 @@ app.add_middleware(
 
 app.include_router(api_router)
 
-orchestrator = IncidentOrchestrator(logs_dir=os.path.join(_REPO_ROOT, "..", "logs"))
+# Shared orchestrator instance imported from api.routes
 
 
 def _maybe_mount_static() -> None:
@@ -40,9 +39,16 @@ def _maybe_mount_static() -> None:
 @app.on_event("startup")
 async def on_startup():
     _maybe_mount_static()
+    import asyncio
+    from api.routes import manager
+    
+    loop = asyncio.get_event_loop()
+    
     def _bg():
-        for _ in orchestrator.collector.watch():
-            pass
+        for filename, line in orchestrator.collector.watch():
+            result = orchestrator.start_pipeline(source=filename, raw_line=line)
+            asyncio.run_coroutine_threadsafe(manager.broadcast(result), loop)
+            
     threading.Thread(target=_bg, daemon=True).start()
 
 

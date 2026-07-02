@@ -16,7 +16,7 @@ class IncidentOrchestrator:
         from agents.resolver import build_default_engine, ResolutionEngine
         from agents.communicator import NotificationAgent
 
-        self.logs_dir: str = logs_dir
+        self.logs_dir: str = os.path.abspath(logs_dir)
         self.db_path: str = os.path.join(_REPO_ROOT, "data", "incidents.db")
         self.collector: LogCollector = LogCollector(logs_dir=logs_dir)
         self.transformer: LogTransformer = LogTransformer()
@@ -36,9 +36,8 @@ class IncidentOrchestrator:
         except Exception as exc:  # noqa: BLE001
             return None, {"stage": name, "error": str(exc)}
 
-    def start_pipeline(self, source: Optional[str] = None) -> Dict[str, Any]:
-        raw_line: Optional[str] = None
-        if source and source.endswith(".log"):
+    def start_pipeline(self, source: Optional[str] = None, raw_line: Optional[str] = None) -> Dict[str, Any]:
+        if not raw_line and source and source.endswith(".log"):
             raw_line = f"2026-07-01 12:00:00 ERROR {source}: simulated error line"
 
         structured_log_value = {

@@ -31,40 +31,63 @@ export default function IncidentDashboard() {
 
   useEffect(() => {
     load();
-    pollRef.current = setInterval(load, 2000);
+    if (!connected) {
+      log('WS disconnected; starting 2s HTTP polling loop fallback.');
+      pollRef.current = setInterval(load, 2000);
+    } else {
+      log('WS connected; disabling HTTP polling loop.');
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [load]);
+  }, [connected, load, log]);
 
   useEffect(() => {
     let ws;
-    try {
-      ws = new WebSocket(WS_URL);
-      ws.addEventListener('open', () => {
-        setConnected(true);
-        log('WS Connected');
-      });
-      ws.addEventListener('close', () => {
-        setConnected(false);
-        log('WS Disconnected');
-      });
-      ws.addEventListener('message', (event) => {
-        try {
-          const parsed = JSON.parse(event.data || '{}');
-          if (parsed && parsed.incident_id) {
-            setIncidents((prev) => {
-              const exists = prev.find((item) => item.incident_id === parsed.incident_id);
-              if (exists) return prev.map((item) => (item.incident_id === parsed.incident_id ? { ...item, ...parsed } : item));
-              return [...prev, parsed];
-            });
+    let reconnectTimeout;
+    
+    const connect = () => {
+      try {
+        ws = new WebSocket(WS_URL);
+        ws.addEventListener('open', () => {
+          setConnected(true);
+          log('WS Connected');
+        });
+        ws.addEventListener('close', () => {
+          setConnected(false);
+          log('WS Disconnected, reconnecting in 3s...');
+          reconnectTimeout = setTimeout(connect, 3000);
+        });
+        ws.addEventListener('error', () => {
+          setConnected(false);
+        });
+        ws.addEventListener('message', (event) => {
+          try {
+            const parsed = JSON.parse(event.data || '{}');
+            if (parsed && parsed.incident_id) {
+              setIncidents((prev) => {
+                const exists = prev.find((item) => item.incident_id === parsed.incident_id);
+                if (exists) return prev.map((item) => (item.incident_id === parsed.incident_id ? { ...item, ...parsed } : item));
+                return [...prev, parsed];
+              });
+            }
+          } catch (e) {
+            log('WS msg non-json');
           }
-        } catch (e) {
-          log('WS msg non-json');
-        }
-      });
-    } catch (e) {
-      log(`WS error: ${e?.message || e}`);
-    }
-    return () => { if (ws) ws.close(); };
+        });
+      } catch (e) {
+        log(`WS error: ${e?.message || e}`);
+        reconnectTimeout = setTimeout(connect, 3000);
+      }
+    };
+    
+    connect();
+    return () => {
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
   }, [log]);
 
   const activeIncident = incidents.find(
@@ -172,7 +195,7 @@ export default function IncidentDashboard() {
               <div className="meta-grid">
                 <div className="meta-item">
                   <span className="meta-label">Severity</span>
-                  <span className="meta-val" style={{ color: activeIncident.structured_log?.severity === 'CRITICAL' ? '#ff3b30' : '#ff9f0a' }}>
+                  <span className="meta-val" style={{ color: (activeIncident.structured_log?.severity === 'CRITICAL' || activeIncident.structured_log?.severity === 'FATAL') ? '#ff3b30' : '#ff9f0a' }}>
                     {activeIncident.structured_log?.severity}
                   </span>
                 </div>

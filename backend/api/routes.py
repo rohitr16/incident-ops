@@ -1,14 +1,22 @@
 import sys
+import os
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
+
+# Ensure parent directory is in sys.path
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from orchestrator import IncidentOrchestrator
 from database import update_playbook_steps, resolve_incident
 
 router = APIRouter()
 
-orchestrator = IncidentOrchestrator(logs_dir="logs")
+# Instantiate single global orchestrator instance
+orchestrator = IncidentOrchestrator(logs_dir=os.path.join(_REPO_ROOT, "..", "logs"))
 
 
 class ConnectionManager:
@@ -55,14 +63,17 @@ async def ingest(payload: dict):
 
 @router.get("/incidents")
 async def list_incidents():
-    return JSONResponse(content=orchestrator.incidents_store)
+    # Run blocking database reads in the thread pool to keep the asyncio event loop free
+    incidents = await run_in_threadpool(lambda: orchestrator.incidents_store)
+    return JSONResponse(content=incidents)
 
 
 @router.post("/incidents/{incident_id}/steps")
 async def update_steps(incident_id: int, payload: dict):
     steps = payload.get("steps_executed", [])
     try:
-        updated = update_playbook_steps(incident_id, steps, orchestrator.db_path)
+        # Run blocking database writes in the thread pool
+        updated = await run_in_threadpool(update_playbook_steps, incident_id, steps, orchestrator.db_path)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     await manager.broadcast(updated)
@@ -72,12 +83,12 @@ async def update_steps(incident_id: int, payload: dict):
 @router.post("/incidents/{incident_id}/resolve")
 async def resolve(incident_id: int):
     try:
-        updated = resolve_incident(incident_id, orchestrator.db_path)
+        # Run blocking database writes in the thread pool
+        updated = await run_in_threadpool(resolve_incident, incident_id, orchestrator.db_path)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     await manager.broadcast(updated)
     return JSONResponse(content=updated)
-
 
 
 @router.websocket("/ws/incidents")
@@ -87,4 +98,7 @@ async def ws_incidents(websocket: WebSocket):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
+        # Always disconnect cleanly, catching any other network/protocol exceptions
         manager.disconnect(websocket)
