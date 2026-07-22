@@ -10,17 +10,33 @@ from database import init_db, save_incident
 import sqlite3
 
 def clean_and_populate_db():
-    db_path = "data/incidents.db"
+    from database import is_postgres, get_connection
+    from dotenv import load_dotenv
+    load_dotenv()
     
-    # 1. Reset database if it exists
+    db_path = os.getenv("DATABASE_URL") or "data/incidents.db"
+    
     print(f"Resetting database at {db_path}...")
-    for suffix in ["", "-wal", "-shm"]:
-        p = db_path + suffix
-        if os.path.exists(p):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
+    if is_postgres(db_path):
+        conn = None
+        try:
+            conn = get_connection(db_path)
+            cursor = conn.cursor()
+            cursor.execute("DROP TABLE IF EXISTS incidents CASCADE;")
+            conn.commit()
+        except Exception as e:
+            print(f"Error dropping database tables: {e}")
+        finally:
+            if conn:
+                conn.close()
+    else:
+        for suffix in ["", "-wal", "-shm"]:
+            p = db_path + suffix
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
                 
     init_db(db_path)
     

@@ -145,26 +145,18 @@ def compliance_router(state: IncidentState):
         return "escalate"
 
 async def finalize_resolution(state: IncidentState, resolution_status: str):
-    import sqlite3
-    triage_dict = {
-        "category": state["category"],
-        "priority": state["priority"]
-    }
-    with sqlite3.connect(state["db_path"]) as conn:
-        conn.execute(
-            "UPDATE incidents SET resolution_status = ?, playbook_steps = ?, steps_executed = ?, recommendation = ?, triage = ? WHERE incident_id = ?",
-            (
-                resolution_status,
-                json.dumps(state["playbook_steps"]),
-                json.dumps(state["steps_executed"]),
-                state["recommendation"],
-                json.dumps(triage_dict),
-                state["incident_id"]
-            )
-        )
-        conn.commit()
+    from database import finalize_incident_resolution, _get_incident_by_id
+    finalize_incident_resolution(
+        incident_id=state["incident_id"],
+        resolution_status=resolution_status,
+        playbook_steps=state["playbook_steps"],
+        steps_executed=state["steps_executed"],
+        recommendation=state["recommendation"],
+        category=state["category"],
+        priority=state["priority"],
+        db_path=state["db_path"]
+    )
     # Re-fetch and broadcast
-    from database import _get_incident_by_id
     updated = _get_incident_by_id(state["incident_id"], state["db_path"])
     if state["broadcast_fn"]:
         await state["broadcast_fn"](updated)

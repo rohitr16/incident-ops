@@ -18,7 +18,7 @@ class IncidentOrchestrator:
         from services.llm import LLMService
 
         self.logs_dir: str = os.path.abspath(logs_dir)
-        self.db_path: str = os.path.join(_REPO_ROOT, "data", "incidents.db")
+        self.db_path: str = os.getenv("DATABASE_URL") or os.path.join(_REPO_ROOT, "data", "incidents.db")
         self.collector: LogCollector = LogCollector(logs_dir=logs_dir)
         self.transformer: LogTransformer = LogTransformer()
         self.detector: IncidentDetector = IncidentDetector()
