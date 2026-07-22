@@ -12,3 +12,4 @@ logs/
 data/samples/*.log
 .superpowers/
 venv/
+.antigravitycli/
